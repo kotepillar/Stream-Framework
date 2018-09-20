@@ -9,7 +9,6 @@ from stream_framework.utils.timing import timer
 import logging
 from stream_framework.feeds.redis import RedisFeed
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +42,6 @@ class FanoutPriority(object):
 
 
 class Manager(object):
-
     '''
     The Manager class handles the fanout from a user's activity
     to all their follower's feeds
@@ -90,9 +88,7 @@ class Manager(object):
     '''
     # : a dictionary with the feeds to fanout to
     # : for example feed_classes = dict(normal=PinFeed, aggregated=AggregatedPinFeed)
-    feed_classes = dict(
-        normal=RedisFeed
-    )
+    feed_classes = dict(normal=RedisFeed)
     # : the user feed class (it stores the latest activity by one user)
     user_feed_class = UserBaseFeed
 
@@ -141,7 +137,8 @@ class Manager(object):
         user_feed.add(activity)
         operation_kwargs = dict(activities=[activity], trim=True)
 
-        for priority_group, follower_ids in self.get_user_follower_ids(user_id=user_id).items():
+        for priority_group, follower_ids in self.get_user_follower_ids(
+                user_id=user_id).items():
             # create the fanout tasks
             for feed_class in self.feed_classes.values():
                 self.create_fanout_tasks(
@@ -149,8 +146,7 @@ class Manager(object):
                     feed_class,
                     add_operation,
                     operation_kwargs=operation_kwargs,
-                    fanout_priority=priority_group
-                )
+                    fanout_priority=priority_group)
         self.metrics.on_activity_published()
 
     def remove_user_activity(self, user_id, activity):
@@ -168,15 +164,15 @@ class Manager(object):
         # no need to trim when removing items
         operation_kwargs = dict(activities=[activity], trim=False)
 
-        for priority_group, follower_ids in self.get_user_follower_ids(user_id=user_id).items():
+        for priority_group, follower_ids in self.get_user_follower_ids(
+                user_id=user_id).items():
             for feed_class in self.feed_classes.values():
                 self.create_fanout_tasks(
                     follower_ids,
                     feed_class,
                     remove_operation,
                     operation_kwargs=operation_kwargs,
-                    fanout_priority=priority_group
-                )
+                    fanout_priority=priority_group)
         self.metrics.on_activity_removed()
 
     def get_feeds(self, user_id):
@@ -186,7 +182,8 @@ class Manager(object):
 
         :returns dict: a dictionary with the feeds we're pushing to
         '''
-        return dict([(k, feed(user_id)) for k, feed in self.feed_classes.items()])
+        return dict(
+            [(k, feed(user_id)) for k, feed in self.feed_classes.items()])
 
     def get_user_feed(self, user_id):
         '''
@@ -230,7 +227,7 @@ class Manager(object):
         if activities:
             return feed.remove_many(activities)
 
-    def follow_user(self, user_id, target_user_id, async=True):
+    def follow_user(self, user_id, target_user_id, async_rename=True):
         '''
         user_id starts following target_user_id
 
@@ -238,9 +235,9 @@ class Manager(object):
         :param target_user_id: the user which is being followed
         :param async: controls if the operation should be done via celery
         '''
-        self.follow_many_users(user_id, [target_user_id], async)
+        self.follow_many_users(user_id, [target_user_id], async_rename)
 
-    def unfollow_user(self, user_id, target_user_id, async=True):
+    def unfollow_user(self, user_id, target_user_id, async_rename=True):
         '''
         user_id stops following target_user_id
 
@@ -248,9 +245,9 @@ class Manager(object):
         :param target_user_id: the user which is being unfollowed
         :param async: controls if the operation should be done via celery
         '''
-        self.unfollow_many_users(user_id, [target_user_id], async)
+        self.unfollow_many_users(user_id, [target_user_id], async_rename)
 
-    def follow_many_users(self, user_id, target_ids, async=True):
+    def follow_many_users(self, user_id, target_ids, async_rename=True):
         '''
         Copies feeds' entries that belong to target_ids into the
         corresponding feeds of user_id.
@@ -259,19 +256,14 @@ class Manager(object):
         :param target_ids: the users to follow
         :param async: controls if the operation should be done via celery
         '''
-        if async:
+        if async_rename:
             follow_many_fn = follow_many.delay
         else:
             follow_many_fn = follow_many
 
-        follow_many_fn(
-            self,
-            user_id,
-            target_ids,
-            self.follow_activity_limit
-        )
+        follow_many_fn(self, user_id, target_ids, self.follow_activity_limit)
 
-    def unfollow_many_users(self, user_id, target_ids, async=True):
+    def unfollow_many_users(self, user_id, target_ids, async_rename=True):
         '''
         Removes feeds' entries that belong to target_ids from the
         corresponding feeds of user_id.
@@ -280,7 +272,7 @@ class Manager(object):
         :param target_ids: the users to unfollow
         :param async: controls if the operation should be done via celery
         '''
-        if async:
+        if async_rename:
             unfollow_many_fn = unfollow_many.delay
         else:
             unfollow_many_fn = unfollow_many
@@ -296,7 +288,12 @@ class Manager(object):
         '''
         return self.priority_fanout_task.get(priority, fanout_operation)
 
-    def create_fanout_tasks(self, follower_ids, feed_class, operation, operation_kwargs=None, fanout_priority=None):
+    def create_fanout_tasks(self,
+                            follower_ids,
+                            feed_class,
+                            operation,
+                            operation_kwargs=None,
+                            fanout_priority=None):
         '''
         Creates the fanout task for the given activities and feed classes
         followers
@@ -317,8 +314,8 @@ class Manager(object):
         chunk_size = self.fanout_chunk_size
         user_ids_chunks = list(chunks(follower_ids, chunk_size))
         msg_format = 'spawning %s subtasks for %s user ids in chunks of %s users'
-        logger.info(
-            msg_format, len(user_ids_chunks), len(follower_ids), chunk_size)
+        logger.info(msg_format, len(user_ids_chunks), len(follower_ids),
+                    chunk_size)
         tasks = []
         # now actually create the tasks
         for ids_chunk in user_ids_chunks:
@@ -327,8 +324,7 @@ class Manager(object):
                 feed_class=feed_class,
                 user_ids=ids_chunk,
                 operation=operation,
-                operation_kwargs=operation_kwargs
-            )
+                operation_kwargs=operation_kwargs)
             tasks.append(task)
         return tasks
 
@@ -386,18 +382,19 @@ class Manager(object):
             raise ValueError('Send activities for only one user please')
 
         activity_chunks = list(chunks(activities, chunk_size))
-        logger.info('processing %s items in %s chunks of %s',
-                    len(activities), len(activity_chunks), chunk_size)
+        logger.info('processing %s items in %s chunks of %s', len(activities),
+                    len(activity_chunks), chunk_size)
 
         for index, activity_chunk in enumerate(activity_chunks):
             # first insert into the global activity storage
             self.user_feed_class.insert_activities(activity_chunk)
             logger.info(
-                'inserted chunk %s (length %s) into the global activity store', index, len(activity_chunk))
+                'inserted chunk %s (length %s) into the global activity store',
+                index, len(activity_chunk))
             # next add the activities to the users personal timeline
             user_feed.add_many(activity_chunk, trim=False)
-            logger.info(
-                'inserted chunk %s (length %s) into the user feed', index, len(activity_chunk))
+            logger.info('inserted chunk %s (length %s) into the user feed',
+                        index, len(activity_chunk))
             # now start a big fanout task
             if fanout:
                 logger.info('starting task fanout for chunk %s', index)
@@ -412,5 +409,4 @@ class Manager(object):
                             feed_class,
                             add_operation,
                             fanout_priority=priority_group,
-                            operation_kwargs=operation_kwargs
-                        )
+                            operation_kwargs=operation_kwargs)
